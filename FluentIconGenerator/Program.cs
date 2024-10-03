@@ -79,8 +79,9 @@ namespace Fluent.Icons
                         // Extrapolate the symbol name from the file path
                         string file = path.Substring(dir.Length + 1); // Also remove the slash
                         Console.Write(file);
-                        bool isFilled = match.Groups["type"].Value == "filled";
-                        string name = file.Split('\\')[0].Replace(" ", "") + match.Groups["size"].ToString() + (isFilled ? "Filled" : "");
+                        string type = match.Groups["type"].Value;
+                        type = type == "regular" ? "" : char.ToUpperInvariant(type[0]) + type.Substring(1);
+                        string name = file.Split('\\')[0].Replace(" ", "") + match.Groups["size"].ToString() + type;
 
                         if (allNames.Contains(name))
                         {

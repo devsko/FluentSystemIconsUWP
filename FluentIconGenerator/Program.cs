@@ -3,6 +3,7 @@ using System.IO;
 using System.Text.RegularExpressions;
 using System.Xml;
 using System.Text;
+using System.Collections.Generic;
 
 namespace FluentIconGenerator
 {
@@ -18,11 +19,14 @@ namespace FluentIconGenerator
             string outputProj = (args.Length >= 2) ? args[1]
                 : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
                   "source", "repos", "FluentSystemIcons", "Fluent.Icons");
-            string outputFile = Path.Combine(outputProj, "FluentSymbolIcon.g.cs");
-            Regex svgReg = new Regex(@"ic_fluent_(?<name>\w+)_(?<size>\d+)_(?<type>regular|filled).svg");
+            Regex svgReg = new Regex(@"ic_fluent_(?<name>\w+)_(?<size>\d+)_(?<type>regular|filled).svg", RegexOptions.Compiled);
 
-            #region Source builder setup
-            var sourceBuilder = new StringBuilder(@"using System.Collections.Generic;
+
+            using (StreamWriter sourceWriter = File.CreateText(Path.Combine(outputProj, "FluentSymbolIcon.g.cs")))
+            using (StreamWriter resourceWriter = File.CreateText(Path.Combine(outputProj, "FluentSymbolIcon.resw")))
+            {
+                sourceWriter.Write(
+@"using System.Collections.Generic;
 
 namespace Fluent.Icons
 {
@@ -33,80 +37,93 @@ namespace Fluent.Icons
     /// <summary>
     /// An enum listing all available Fluent System Icon symbols
     /// </summary>
-    public enum FluentSymbol {
-[{FluentSymbolEnum}]
-    }
-
-    public partial class FluentSymbolIcon
+    public enum FluentSymbol 
     {
-        /// <summary>
-        /// A lookup table containing the paths representing each available Fluent System Icon symbol
-        /// </summary>
-        public static Dictionary<FluentSymbol, string> AllFluentIcons { get; } = new Dictionary<FluentSymbol, string>
-        {
-[{AllFluentIconsDict}]
-        };
-    }
-}");
-            var FluentSymbolEnumBuilder = new StringBuilder();
-            var AllFluentIconsBuilder = new StringBuilder();
-            #endregion
+");
+                resourceWriter.Write(
+@"<?xml version=""1.0"" encoding=""utf-8""?>
+<root>
+	<resheader name=""resmimetype"">
+		<value>text/microsoft-resx</value>
+	</resheader>
+	<resheader name=""version"">
+		<value>1.3</value>
+	</resheader>
+	<resheader name=""reader"">
+		<value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=2.0.3500.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+	</resheader>
+	<resheader name=""writer"">
+		<value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=2.0.3500.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+	</resheader>
+");
 
-            foreach (string folder in Directory.EnumerateDirectories(dir, @"*", SearchOption.TopDirectoryOnly))
-            {
-                var SVGFolder = Path.Combine(folder, "SVG");
-                foreach (string path in Directory.EnumerateFiles(SVGFolder, @"*", SearchOption.AllDirectories))
+                var allNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                int i = 0;
+
+                var svg = new XmlDocument();
+                // Create namespace manager
+                XmlNamespaceManager xmlnsManager = new XmlNamespaceManager(svg.NameTable);
+                xmlnsManager.AddNamespace("svg", "http://www.w3.org/2000/svg");
+
+                StringBuilder xamlPathData = new StringBuilder();
+
+                foreach (string folder in Directory.EnumerateDirectories(dir, @"*", SearchOption.TopDirectoryOnly))
                 {
-                    var match = svgReg.Match(path);
-                    if (!match.Success)
-                        continue;
-
-                    // Extrapolate the symbol name from the file path
-                    string file = path.Substring(dir.Length + 1); // Also remove the slash
-                    Console.WriteLine(file);
-                    bool isFilled = match.Groups["type"].Value == "filled";
-                    string name = file.Split('\\')[0].Replace(" ", "") + match.Groups["size"].ToString() + (isFilled ? "Filled" : "");
-
-                    #region SVG reading
-                    // Load the path data into a string
-                    var svg = new XmlDocument();
-                    svg.Load(path);
-                    // Create namespace manager
-                    XmlNamespaceManager xmlnsManager = new XmlNamespaceManager(svg.NameTable);
-                    xmlnsManager.AddNamespace("svg", "http://www.w3.org/2000/svg");
-
-                    // Select all SVG path elements
-                    XmlNodeList list = svg.LastChild.SelectNodes("//svg:path", xmlnsManager);
-                    string xamlPathData = "";
-                    foreach (XmlNode pathElem in list)
+                    var SVGFolder = Path.Combine(folder, "SVG");
+                    foreach (string path in Directory.EnumerateFiles(SVGFolder, @"*", SearchOption.AllDirectories))
                     {
-                        // Appending SVG paths effectively combines them into one
-                        xamlPathData += pathElem.Attributes["d"].Value + " ";
+                        var match = svgReg.Match(path);
+                        if (!match.Success)
+                            continue;
+
+                        // Extrapolate the symbol name from the file path
+                        string file = path.Substring(dir.Length + 1); // Also remove the slash
+                        Console.Write(file);
+                        bool isFilled = match.Groups["type"].Value == "filled";
+                        string name = file.Split('\\')[0].Replace(" ", "") + match.Groups["size"].ToString() + (isFilled ? "Filled" : "");
+
+                        if (allNames.Contains(name))
+                        {
+                            Console.Write(" DUPLICATE IGNORED");
+                        }
+                        else
+                        {
+                            allNames.Add(name);
+
+                            #region SVG reading
+                            // Load the path data into a string
+                            svg.Load(path);
+
+                            // Select all SVG path elements
+                            XmlNodeList list = svg.LastChild.SelectNodes("//svg:path", xmlnsManager);
+                            xamlPathData.Clear();
+                            foreach (XmlNode pathElem in list)
+                            {
+                                // Appending SVG paths effectively combines them into one
+                                xamlPathData.Append(pathElem.Attributes["d"].Value).Append(' ');
+                            }
+                            #endregion
+
+                            // Generate the C# source code
+                            // TODO: Switch to .NET source generators
+                            sourceWriter.WriteLine($"        {name},");
+                            resourceWriter.WriteLine($"    <data name=\"{i++}\"><value>{xamlPathData}</value></data>");
+                        }
+                        Console.WriteLine();
                     }
-                    #endregion
+                }
 
-                    // Generate the C# source code
-                    // TODO: Switch to .NET source generators
-                    FluentSymbolEnumBuilder.Append($"        {name},\r\n");
-                    AllFluentIconsBuilder.Append($"            {{ FluentSymbol.{name}, \"{xamlPathData}\" }},\r\n");
-                } 
+                sourceWriter.WriteLine(
+@"    }
+}");
+
+                resourceWriter.WriteLine(
+@"</root>");
             }
-
-            // Update the document
-            sourceBuilder.Replace("[{FluentSymbolEnum}]", FluentSymbolEnumBuilder.ToString());
-            sourceBuilder.Replace("[{AllFluentIconsDict}]", AllFluentIconsBuilder.ToString());
-
-            // Write the generated code to the output file
-            File.WriteAllText(outputFile, sourceBuilder.ToString());
 
             Console.ForegroundColor = ConsoleColor.Green;
             Console.WriteLine("\r\nGeneration complete!");
             Console.ResetColor();
-            Console.WriteLine("File at:");
-            Console.WriteLine(outputFile);
-            Console.WriteLine("\r\nPress any key to exit...");
-
-            Console.Read();
         }
     }
 }

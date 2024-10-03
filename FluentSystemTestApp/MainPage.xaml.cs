@@ -1,4 +1,5 @@
-﻿using Windows.UI.Xaml;
+﻿using System;
+using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Fluent.Icons;
 
@@ -11,6 +12,8 @@ namespace FluentSystemTestApp
     /// </summary>
     public sealed partial class MainPage : Page
     {
+        public FluentSymbol[] AllFluentSymbols => (FluentSymbol[])Enum.GetValues(typeof(FluentSymbol));
+
         public MainPage()
         {
             this.InitializeComponent();

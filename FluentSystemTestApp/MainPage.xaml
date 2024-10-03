@@ -44,7 +44,7 @@
                 <ColumnDefinition/>
             </Grid.ColumnDefinitions>
 
-            <ListView ItemsSource="{x:Bind fluent:FluentSymbolIcon.AllFluentIcons.Keys}">
+            <ListView ItemsSource="{x:Bind AllFluentSymbols}">
                 <ListView.ItemTemplate>
                     <DataTemplate x:DataType="fluent:FluentSymbol">
                         <ListViewItem>

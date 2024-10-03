@@ -1,4 +1,6 @@
-﻿using Windows.UI.Xaml;
+﻿using Windows.ApplicationModel.Resources;
+using Windows.ApplicationModel.Resources.Core;
+using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Media;
 
@@ -8,6 +10,8 @@ namespace Fluent.Icons
 {
     public partial class FluentSymbolIcon : Control
     {
+        private static ResourceMap symbolResources = ResourceManager.Current.MainResourceMap.GetSubtree("Fluent.Icons/FluentSymbolIcon");
+
         private PathIcon iconDisplay;
 
         public FluentSymbolIcon()
@@ -89,9 +93,9 @@ namespace Fluent.Icons
         /// </summary>
         public static Geometry GetPathData(FluentSymbol symbol)
         {
-            if (AllFluentIcons.TryGetValue(symbol, out string pathData))
+            if (symbolResources.TryGetValue(((int)symbol).ToString(), out NamedResource symbolResource))
             {
-                return (Geometry)Windows.UI.Xaml.Markup.XamlBindingHelper.ConvertValue(typeof(Geometry), pathData);
+                return (Geometry)Windows.UI.Xaml.Markup.XamlBindingHelper.ConvertValue(typeof(Geometry), symbolResource.Resolve().ValueAsString);
             }
             else
             {
